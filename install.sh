@@ -11,7 +11,7 @@ INSTALL_DIR="/usr/local/bin"
 # Fetch latest version tag
 LATEST_TAG=$(curl -s https://api.github.com/repos/${REPO}/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 if [ -z "$LATEST_TAG" ]; then
-    echo "Failed to fetch latest release tag."
+    echo "Failed to fetch latest release tag. Check if the repo exists and has releases."
     exit 1
 fi
 VERSION=${LATEST_TAG#v}  # Remove 'v' prefix if present
@@ -49,7 +49,7 @@ RELEASE_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/${FILE_N
 
 # Download the binary
 echo "Downloading ${FILE_NAME} from ${RELEASE_URL}..."
-curl -L -o "${BINARY_NAME}" "${RELEASE_URL}"
+curl -L -o "${BINARY_NAME}" "${RELEASE_URL}" || { echo "Download failed. Check if the asset exists in the release."; exit 1; }
 
 # Make executable (skip for Windows .exe)
 if [ "$OS" != "windows" ]; then
