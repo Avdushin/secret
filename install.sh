@@ -14,7 +14,6 @@ if [ -z "$LATEST_TAG" ]; then
     echo "Failed to fetch latest release tag. Check if the repo exists and has releases."
     exit 1
 fi
-VERSION=${LATEST_TAG#v}  # Remove 'v' prefix if present
 
 # Detect OS
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -44,7 +43,7 @@ if [ "$OS" = "windows" ]; then
 else
     EXT=""
 fi
-FILE_NAME="${BINARY_NAME}-${VERSION}-${OS}-${ARCH}${EXT}"
+FILE_NAME="${BINARY_NAME}-${OS}-${ARCH}${EXT}"
 RELEASE_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/${FILE_NAME}"
 
 # Download the binary
