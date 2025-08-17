@@ -1,7 +1,7 @@
 # Project settings
 NAME = secret
 # VERSION = $(shell git describe --tags --always --dirty)
-VERSION = 0.0.1
+VERSION = 0.1.0
 BUILD_DIR = bin
 GO_PACKAGE = ./cmd/$(NAME)
 
@@ -44,9 +44,9 @@ release: clean deps
 		$(foreach GOARCH, $(ARCHITECTURES), \
 			$(shell export GOOS=$(GOOS); export GOARCH=$(GOARCH); \
 				if [ "$(GOOS)" = "windows" ]; then \
-					$(GOBUILD) -o $(BUILD_DIR)/$(NAME)-$(VERSION)-$(GOOS)-$(GOARCH).exe $(GO_PACKAGE); \
+					$(GOBUILD) -o $(BUILD_DIR)/$(NAME)-$(GOOS)-$(GOARCH).exe $(GO_PACKAGE); \
 				else \
-					$(GOBUILD) -o $(BUILD_DIR)/$(NAME)-$(VERSION)-$(GOOS)-$(GOARCH) $(GO_PACKAGE); \
+					$(GOBUILD) -o $(BUILD_DIR)/$(NAME)-$(GOOS)-$(GOARCH) $(GO_PACKAGE); \
 				fi; \
 			) \
 		) \

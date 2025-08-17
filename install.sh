@@ -5,9 +5,15 @@ set -euo pipefail
 # Script to install secret CLI from GitHub releases
 
 REPO="Avdushin/secret"
-VERSION="0.0.1"  # Change to 'latest' if using GitHub API for latest tag
 BINARY_NAME="secret"
 INSTALL_DIR="/usr/local/bin"
+
+# Fetch latest version tag
+LATEST_TAG=$(curl -s https://api.github.com/repos/${REPO}/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+if [ -z "$LATEST_TAG" ]; then
+    echo "Failed to fetch latest release tag. Check if the repo exists and has releases."
+    exit 1
+fi
 
 # Detect OS
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -37,12 +43,12 @@ if [ "$OS" = "windows" ]; then
 else
     EXT=""
 fi
-FILE_NAME="${BINARY_NAME}-${VERSION}-${OS}-${ARCH}${EXT}"
-RELEASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${FILE_NAME}"
+FILE_NAME="${BINARY_NAME}-${OS}-${ARCH}${EXT}"
+RELEASE_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/${FILE_NAME}"
 
 # Download the binary
 echo "Downloading ${FILE_NAME} from ${RELEASE_URL}..."
-curl -L -o "${BINARY_NAME}" "${RELEASE_URL}"
+curl -L -o "${BINARY_NAME}" "${RELEASE_URL}" || { echo "Download failed. Check if the asset exists in the release."; exit 1; }
 
 # Make executable (skip for Windows .exe)
 if [ "$OS" != "windows" ]; then

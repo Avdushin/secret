@@ -12,7 +12,7 @@ func main() {
 	var rootCmd = &cobra.Command{
 		Use:     "secret",
 		Short:   "Утилита для управления секретами в проектах",
-		Version: "0.0.1",
+		Version: "0.1.0",
 	}
 
 	rootCmd.AddCommand(commands.InitCmd())
@@ -21,7 +21,6 @@ func main() {
 	rootCmd.AddCommand(commands.ExportKeyCmd())
 	rootCmd.AddCommand(commands.DeleteKeyCmd())
 	rootCmd.AddCommand(commands.CheckCmd())
-	// rootCmd.AddCommand(commands.VersionCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

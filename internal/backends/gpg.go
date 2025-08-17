@@ -96,19 +96,22 @@ func createExampleFile(originalFile string) error {
 		processed = "# Example file for " + filepath.Base(originalFile) + "\n"
 	}
 	// Формируем правильное имя example-файла
-	baseName := strings.TrimSuffix(originalFile, ext)
-	if strings.HasPrefix(filepath.Base(originalFile), ".") {
+	dir := filepath.Dir(originalFile)
+	fileBase := filepath.Base(originalFile)
+	baseWithoutExt := strings.TrimSuffix(fileBase, ext)
+	var exampleFileName string
+	if strings.HasPrefix(fileBase, ".") {
 		// Для скрытых файлов (.config.yaml) создаем .config.example.yaml
-		parts := strings.SplitN(filepath.Base(originalFile), ".", 3)
+		parts := strings.SplitN(fileBase, ".", 3)
 		if len(parts) >= 3 {
-			baseName = strings.Join(parts[:2], ".") + ".example." + strings.Join(parts[2:], ".")
+			exampleFileName = strings.Join(parts[:2], ".") + ".example." + strings.Join(parts[2:], ".")
 		} else {
-			baseName = baseName + ".example" + ext
+			exampleFileName = baseWithoutExt + ".example" + ext
 		}
 	} else {
-		baseName = baseName + ".example" + ext
+		exampleFileName = baseWithoutExt + ".example" + ext
 	}
-	exampleFile := filepath.Join(filepath.Dir(originalFile), baseName)
+	exampleFile := filepath.Join(dir, exampleFileName)
 	return os.WriteFile(exampleFile, []byte(processed), 0644)
 }
 
