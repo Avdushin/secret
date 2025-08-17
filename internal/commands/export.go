@@ -48,7 +48,7 @@ func ExportKeyCmd() *cobra.Command {
 
 			// Экспортируем публичный ключ
 			pubKeyPath := filepath.Join(outputDir, fmt.Sprintf("%s.pub.asc", filenamePrefix))
-			cmdPub := exec.Command("gpg", "--armor", "--export", cfg.GPGKey, "--output", pubKeyPath)
+			cmdPub := exec.Command("gpg", "--output", pubKeyPath, "--armor", "--export", cfg.GPGKey)
 			if output, err := cmdPub.CombinedOutput(); err != nil {
 				fmt.Printf("Ошибка экспорта публичного ключа: %s\n", output)
 				os.Exit(1)
@@ -56,7 +56,7 @@ func ExportKeyCmd() *cobra.Command {
 
 			// Экспортируем приватный ключ
 			privKeyPath := filepath.Join(outputDir, fmt.Sprintf("%s.priv.asc", filenamePrefix))
-			cmdPriv := exec.Command("gpg", "--armor", "--export-secret-keys", cfg.GPGKey, "--output", privKeyPath)
+			cmdPriv := exec.Command("gpg", "--output", privKeyPath, "--armor", "--export-secret-keys", cfg.GPGKey)
 			cmdPriv.Stdin = os.Stdin // Для ввода пароля если нужно
 			if output, err := cmdPriv.CombinedOutput(); err != nil {
 				fmt.Printf("Ошибка экспорта приватного ключа: %s\n", output)

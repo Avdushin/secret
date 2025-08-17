@@ -12,7 +12,7 @@ func main() {
 	var rootCmd = &cobra.Command{
 		Use:     "secret",
 		Short:   "Утилита для управления секретами в проектах",
-		Version: "0.0.1",
+		Version: "0.0.2",
 	}
 
 	rootCmd.AddCommand(commands.InitCmd())
