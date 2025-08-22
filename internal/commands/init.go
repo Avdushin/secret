@@ -134,7 +134,7 @@ func InitCmd() *cobra.Command {
 			//@ Сохраняем конфиг
 			cfg := &config.Config{
 				Backend:     backend,
-				GPGKey:      fmt.Sprintf("%d", keyID),
+				GPGKey:      fmt.Sprintf("%X", keyID),
 				ProjectName: projectName,
 				SecretFiles: secretFiles,
 			}
