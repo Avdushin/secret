@@ -15,6 +15,8 @@ import (
 func ImportKeyCmd() *cobra.Command {
 	var keyDir string
 	var force bool
+	var passphrase string
+	var noPassphrase bool
 
 	cmd := &cobra.Command{
 		Use:   "import [directory]",
@@ -57,16 +59,24 @@ func ImportKeyCmd() *cobra.Command {
 			fmt.Printf(" - Публичный ключ: %s\n", pubKeyPath)
 			fmt.Printf(" - Приватный ключ: %s\n", privKeyPath)
 
+			// Запрашиваем парольную фразу, если не указана и не отключена
+			if passphrase == "" && !noPassphrase {
+				// Проверяем, требует ли ключ пароль
+				if keyRequiresPassphrase(privKeyPath) {
+					passphrase = promptPassword("Введите парольную фразу для ключа: ")
+				}
+			}
+
 			// Импортируем публичный ключ
 			fmt.Println("\n📥 Импортируем публичный ключ...")
-			if err := importKey(pubKeyPath); err != nil {
+			if err := importKey(pubKeyPath, false, ""); err != nil {
 				fmt.Printf("❌ Ошибка импорта публичного ключа: %v\n", err)
 				os.Exit(1)
 			}
 
 			// Импортируем приватный ключ
 			fmt.Println("📥 Импортируем приватный ключ...")
-			if err := importKey(privKeyPath); err != nil {
+			if err := importKey(privKeyPath, true, passphrase); err != nil {
 				fmt.Printf("❌ Ошибка импорта приватного ключа: %v\n", err)
 				os.Exit(1)
 			}
@@ -92,6 +102,8 @@ func ImportKeyCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&keyDir, "dir", "d", "", "Директория для поиска ключей (по умолчанию текущая директория)")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Принудительный импорт, даже если ключи уже существуют")
+	cmd.Flags().StringVarP(&passphrase, "passphrase", "p", "", "Парольная фраза для ключа")
+	cmd.Flags().BoolVar(&noPassphrase, "no-passphrase", false, "Не запрашивать парольную фразу (если ключ не защищен)")
 	return cmd
 }
 
@@ -153,8 +165,20 @@ func findKeyFiles(searchDir, prefix string) (string, string, error) {
 }
 
 // importKey импортирует ключ с помощью GPG
-func importKey(keyPath string) error {
-	cmd := exec.Command("gpg", "--import", keyPath)
+func importKey(keyPath string, isPrivate bool, passphrase string) error {
+	var cmd *exec.Cmd
+
+	if isPrivate && passphrase != "" {
+		// Для приватного ключа с паролем используем batch режим
+		cmd = exec.Command("gpg", "--batch", "--yes", "--passphrase", passphrase, "--import", keyPath)
+	} else if isPrivate {
+		// Для приватного ключа без пароля используем интерактивный режим
+		cmd = exec.Command("gpg", "--import", keyPath)
+	} else {
+		// Для публичного ключа используем batch режим
+		cmd = exec.Command("gpg", "--batch", "--yes", "--import", keyPath)
+	}
+
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -199,3 +223,37 @@ func detectProjectKey(projectName string) (string, error) {
 	}
 	return "", fmt.Errorf("не удалось найти ключ для проекта %s после импорта", projectName)
 }
+
+// keyRequiresPassphrase проверяет, требует ли ключ парольную фразу
+func keyRequiresPassphrase(keyPath string) bool {
+	// Простая проверка: если файл содержит информацию о защите
+	content, err := os.ReadFile(keyPath)
+	if err != nil {
+		return true // По умолчанию предполагаем, что пароль нужен
+	}
+
+	// Проверяем наличие маркеров защищенного ключа
+	contentStr := string(content)
+	return strings.Contains(contentStr, "PROTECTED") ||
+		strings.Contains(contentStr, "ENCAPSULATED") ||
+		!strings.Contains(contentStr, "UNPROTECTED")
+}
+
+// promptPassword запрашивает пароль у пользователя
+// func promptPassword(prompt string) string {
+// 	fmt.Print(prompt)
+
+// 	// Пытаемся прочитать пароль без эха
+// 	if term.IsTerminal(int(os.Stdin.Fd())) {
+// 		bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+// 		if err == nil {
+// 			fmt.Println()
+// 			return string(bytePassword)
+// 		}
+// 	}
+
+// 	// Fallback: обычный ввод
+// 	reader := bufio.NewReader(os.Stdin)
+// 	input, _ := reader.ReadString('\n')
+// 	return strings.TrimSpace(input)
+// }
