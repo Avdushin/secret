@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Avdushin/secret/pkg/config"
 	"github.com/ProtonMail/gopenpgp/v2/crypto"
@@ -77,6 +78,13 @@ func InitCmd() *cobra.Command {
 				kt = "x25519"
 			}
 
+			// Срок действия ключа
+			expiryDays := promptInt("Срок действия ключа (в днях, 0 - бессрочно) [365]: ", 365, nil)
+			var expiryTime time.Time
+			if expiryDays > 0 {
+				expiryTime = time.Now().AddDate(0, 0, expiryDays)
+			}
+
 			// Парольная фраза
 			usePassphrase := promptYesNo("Использовать парольную фразу для ключа? (y/N): ", false)
 			var passphrase string
@@ -94,7 +102,17 @@ func InitCmd() *cobra.Command {
 			keyEmail := fmt.Sprintf("project+%s@team.org", strings.ToLower(projectName))
 
 			fmt.Printf("\nСоздаем GPG-ключ для проекта: %s\n", keyName)
-			privateKeyArmored, err := helper.GenerateKey(keyName, keyEmail, []byte(passphrase), kt, keyLength)
+
+			// Создаем ключ (в текущей версии gopenpgp нет прямого способа задать срок действия через helper)
+			// Используем стандартную функцию GenerateKey
+			privateKeyArmored, err := helper.GenerateKey(
+				keyName,
+				keyEmail,
+				[]byte(passphrase),
+				kt,
+				keyLength,
+			)
+
 			if err != nil {
 				fmt.Printf("Ошибка создания ключа: %v\n", err)
 				os.Exit(1)
@@ -132,9 +150,13 @@ func InitCmd() *cobra.Command {
 			}
 
 			//@ Сохраняем конфиг
+			shortKeyID := fmt.Sprintf("%X", keyID)
+			if len(shortKeyID) > 16 {
+				shortKeyID = shortKeyID[len(shortKeyID)-16:]
+			}
 			cfg := &config.Config{
 				Backend:     backend,
-				GPGKey:      fmt.Sprintf("%X", keyID),
+				GPGKey:      shortKeyID,
 				ProjectName: projectName,
 				SecretFiles: secretFiles,
 			}
@@ -145,6 +167,13 @@ func InitCmd() *cobra.Command {
 			}
 
 			fmt.Printf("\n✅ Успешно! Ключ создан (ID: %X)\n", keyID)
+			if expiryDays > 0 {
+				fmt.Printf("⏰ Срок действия: %d дней (до %s)\n", expiryDays, expiryTime.Format("2006-01-02"))
+				fmt.Printf("⚠️  Внимание: Срок действия ключа установлен только информационно.\n")
+				fmt.Printf("   Для реального ограничения срока действия используйте нативные GPG инструменты.\n")
+			} else {
+				fmt.Printf("⏰ Срок действия: бессрочно\n")
+			}
 			fmt.Printf("🔑 Для экспорта ключа выполните: secret export\n")
 			fmt.Printf("🔒 Для шифрования файлов выполните: secret encrypt\n")
 		},
