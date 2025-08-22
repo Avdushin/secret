@@ -15,9 +15,59 @@
 - :key: **Инициализация**: Генерация GPG-ключа и настройка секретных файлов.
 - :lock: **Шифрование/Расшифровка**: Поддержка `.env`, JSON, YAML, TOML, INI; пакетные операции.
 - :memo: **Шаблоны**: Авто-создание `.example` с `<placeholder>`.
-- :key: **Ключи**: Экспорт, удаление, проверка.
+- :key: **Ключи**: Экспорт, импорт, удаление, проверка.
 - :globe_with_meridians: **Кросс-платформа**: Linux, macOS, Windows.
 - :construction: **Расширяемость**: Бэкенды (GPG сейчас, Vault/Bitwarden скоро).
+
+[Установка](#package-установка)
+
+## :warning: Зависимости
+
+Для работы программы требуется установленная утилита **GPG (GNU Privacy Guard)**:
+
+### Linux
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install gnupg
+
+# Fedora/RHEL/CentOS
+sudo dnf install gnupg2
+
+# Arch Linux/Manjaro
+sudo pacman -S gnupg
+
+# Solus
+sudo eopkg install gnupg
+
+# Void Linux
+sudo xbps-install gnupg
+
+# Gentoo
+sudo emerge --ask app-crypt/gnupg
+
+# NixOS
+nix-env -i gnupg
+```
+
+### macOS
+```bash
+# Homebrew
+brew install gnupg
+
+# MacPorts
+sudo port install gnupg2
+```
+
+### Windows
+- Скачайте [Gpg4win](https://www.gpg4win.org/)
+- Или используйте [Chocolatey](https://chocolatey.org/):
+  ```powershell
+  choco install gpg4win
+  ```
+- Или [Scoop](https://scoop.sh/):
+  ```powershell
+  scoop install gpg
+  ```
 
 ## :package: Установка
 
@@ -49,10 +99,36 @@ make build
 | `secret init` | Инициализация: создаёт ключ и конфиг. |
 | `secret encrypt` | Шифрует все файлы, создаёт `.gpg` и `.example`. |
 | `secret decrypt <file.gpg>` | Расшифровка файла. |
-| `secret export-key -o dir` | Экспорт ключей. |
+| `secret check` | Проверяет ключ проекта. |
+| `secret check --all` | Показывает все доступные GPG ключи. |
+| `secret export -o dir` | Экспорт ключей. |
+| `secret import <dir>` | Импорт ключей. |
 | `secret version` | Показ версии. |
 
 Подробности в [docs/examples.md](docs/examples.md).
+
+## :key: Управление ключами
+
+```bash
+# Экспорт ключей проекта (в .secrets/backup/)
+./secret export
+
+# Экспорт в конкретную директорию
+./secret export -o ~/backups/myapp-keys
+
+# Импорт ключей проекта (автопоиск в текущей директории)
+./secret import
+
+# Импорт из конкретной директории
+./secret import .secrets/backup/
+./secret import --dir ~/backups/myapp-keys
+
+# Удаление ключа проекта (с подтверждением и бэкапом)
+./secret delete-key
+
+# Принудительное удаление без подтверждения
+./secret delete-key --force
+```
 
 ## :gear: Конфигурация
 

@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ImportKeyCmd импортирует GPG-ключи проекта
+// @ ImportKeyCmd импортирует GPG-ключи проекта
 func ImportKeyCmd() *cobra.Command {
 	var keyDir string
 	var force bool
