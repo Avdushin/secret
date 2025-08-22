@@ -49,6 +49,7 @@ func DecryptCmd() *cobra.Command {
 					fmt.Printf("⚠️ Ошибка при расшифровке %s: %v\n", file, err)
 				}
 			}
+
 			fmt.Println("✅ Все файлы обработаны")
 		},
 	}

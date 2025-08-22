@@ -34,7 +34,6 @@ func CheckCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&showAll, "all", "a", false, "Показать все доступные GPG ключи")
-
 	return cmd
 }
 
@@ -54,7 +53,6 @@ func checkProjectKey() {
 	// Сначала пробуем загрузить конфиг проекта
 	cfg, err := config.LoadConfig()
 	var projectKey string
-
 	if err == nil && cfg.GPGKey != "" {
 		// Используем ключ из конфига
 		projectKey = cfg.GPGKey
@@ -84,7 +82,6 @@ func checkProjectKey() {
 	} else {
 		// Показываем информацию о ключе проекта
 		fmt.Printf("✅ Ключ проекта найден:\n")
-
 		// Получаем детальную информацию о ключе
 		detailCmd := exec.Command("gpg", "--list-secret-keys", "--keyid-format=LONG", projectKey)
 		if detailOutput, err := detailCmd.CombinedOutput(); err == nil {
@@ -115,7 +112,6 @@ func detectProjectKeyFromDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	dirName := filepath.Base(currentDir)
 
 	// Получаем список всех ключей
@@ -124,16 +120,15 @@ func detectProjectKeyFromDir() (string, error) {
 		return "", err
 	}
 
-	// Ищем ключ с именем, соответствующим имени директории
 	lines := strings.Split(string(out), "\n")
-	for _, line := range lines {
+	for idx, line := range lines {
 		if strings.Contains(line, "uid") && strings.Contains(line, dirName) {
-			// Ищем ID ключа в предыдущих строках
-			for i := 0; i < 5; i++ {
-				prevLine := ""
-				if i < len(lines) {
-					prevLine = lines[i]
+			// Ищем "sec" в предыдущих строках (назад до 5 строк)
+			for j := 1; j <= 5; j++ {
+				if idx-j < 0 {
+					break
 				}
+				prevLine := lines[idx-j]
 				if strings.Contains(prevLine, "sec") {
 					parts := strings.Fields(prevLine)
 					if len(parts) >= 2 {
@@ -149,6 +144,5 @@ func detectProjectKeyFromDir() (string, error) {
 			}
 		}
 	}
-
 	return "", fmt.Errorf("не удалось найти ключ для проекта %s", dirName)
 }

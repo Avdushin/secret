@@ -21,10 +21,9 @@ func ImportKeyCmd() *cobra.Command {
 		Short: "Импортирует GPG-ключи проекта",
 		Long: `Импортирует GPG-ключи проекта из указанной директории или автоматически
 ищет ключи в текущей директории и поддиректориях.
-
 Примеры:
-  secret import                    # Автопоиск в текущей директории
-  secret import .secrets/backup    # Поиск в указанной директории
+  secret import # Автопоиск в текущей директории
+  secret import .secrets/backup # Поиск в указанной директории
   secret import --dir .secrets/backup # То же самое с флагом`,
 		Args: cobra.MaximumNArgs(1), // Разрешаем 0 или 1 аргумент
 		Run: func(cmd *cobra.Command, args []string) {
@@ -72,14 +71,27 @@ func ImportKeyCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
+			// После импорта определяем keyID и сохраняем в конфиг
+			keyID, err := detectProjectKey(cfg.ProjectName)
+			if err != nil {
+				fmt.Printf("❌ Ошибка определения keyID после импорта: %v\n", err)
+				os.Exit(1)
+			}
+
+			cfg.GPGKey = keyID
+			if err := config.SaveConfig(cfg); err != nil {
+				fmt.Printf("❌ Ошибка сохранения конфига: %v\n", err)
+				os.Exit(1)
+			}
+
 			fmt.Println("\n✅ Ключи успешно импортированы!")
+			fmt.Printf("✅ Ключ %s сохранён в конфиге проекта.\n", keyID)
 			fmt.Println("Теперь вы можете работать с зашифрованными файлами проекта.")
 		},
 	}
 
 	cmd.Flags().StringVarP(&keyDir, "dir", "d", "", "Директория для поиска ключей (по умолчанию текущая директория)")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Принудительный импорт, даже если ключи уже существуют")
-
 	return cmd
 }
 
@@ -96,7 +108,6 @@ func findKeyFiles(searchDir, prefix string) (string, string, error) {
 		if err != nil {
 			return err
 		}
-
 		if info.IsDir() {
 			return nil
 		}
@@ -153,4 +164,38 @@ func importKey(keyPath string) error {
 	}
 
 	return nil
+}
+
+// detectProjectKey определяет keyID по имени проекта
+func detectProjectKey(projectName string) (string, error) {
+	out, err := exec.Command("gpg", "--list-secret-keys", "--keyid-format=LONG").CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for idx, line := range lines {
+		if strings.Contains(line, "uid") && strings.Contains(line, projectName) {
+			// Ищем "sec" в предыдущих строках (назад до 5 строк)
+			for j := 1; j <= 5; j++ {
+				if idx-j < 0 {
+					break
+				}
+				prevLine := lines[idx-j]
+				if strings.Contains(prevLine, "sec") {
+					parts := strings.Fields(prevLine)
+					if len(parts) >= 2 {
+						keyPart := parts[1]
+						if strings.Contains(keyPart, "/") {
+							keyParts := strings.Split(keyPart, "/")
+							if len(keyParts) == 2 {
+								return keyParts[1], nil
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("не удалось найти ключ для проекта %s после импорта", projectName)
 }
