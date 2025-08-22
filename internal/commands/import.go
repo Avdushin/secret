@@ -1,13 +1,18 @@
+// internal/commands/import.go
 package commands
 
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"bytes"
+
 	"github.com/Avdushin/secret/pkg/config"
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"github.com/spf13/cobra"
 )
 
@@ -57,26 +62,60 @@ func ImportKeyCmd() *cobra.Command {
 			fmt.Printf(" - Публичный ключ: %s\n", pubKeyPath)
 			fmt.Printf(" - Приватный ключ: %s\n", privKeyPath)
 
-			// Импортируем публичный ключ
-			fmt.Println("\n📥 Импортируем публичный ключ...")
-			if err := importKey(pubKeyPath); err != nil {
-				fmt.Printf("❌ Ошибка импорта публичного ключа: %v\n", err)
-				os.Exit(1)
-			}
-
-			// Импортируем приватный ключ
-			fmt.Println("📥 Импортируем приватный ключ...")
-			if err := importKey(privKeyPath); err != nil {
-				fmt.Printf("❌ Ошибка импорта приватного ключа: %v\n", err)
-				os.Exit(1)
-			}
-
-			// После импорта определяем keyID и сохраняем в конфиг
-			keyID, err := detectProjectKey(cfg.ProjectName)
+			// Валидация и копирование
+			// Load pub
+			pubData, err := os.ReadFile(pubKeyPath)
 			if err != nil {
-				fmt.Printf("❌ Ошибка определения keyID после импорта: %v\n", err)
+				fmt.Printf("❌ Ошибка чтения публичного ключа: %v\n", err)
 				os.Exit(1)
 			}
+			pubBlock, err := armor.Decode(bytes.NewReader(pubData))
+			if err != nil {
+				fmt.Printf("❌ Ошибка декодирования публичного ключа: %v\n", err)
+				os.Exit(1)
+			}
+			_, err = openpgp.ReadEntity(packet.NewReader(pubBlock.Body))
+			if err != nil {
+				fmt.Printf("❌ Недопустимый публичный ключ: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Load priv
+			privData, err := os.ReadFile(privKeyPath)
+			if err != nil {
+				fmt.Printf("❌ Ошибка чтения приватного ключа: %v\n", err)
+				os.Exit(1)
+			}
+			privBlock, err := armor.Decode(bytes.NewReader(privData))
+			if err != nil {
+				fmt.Printf("❌ Ошибка декодирования приватного ключа: %v\n", err)
+				os.Exit(1)
+			}
+			privEntity, err := openpgp.ReadEntity(packet.NewReader(privBlock.Body))
+			if err != nil {
+				fmt.Printf("❌ Недопустимый приватный ключ: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Копируем
+			err = os.MkdirAll(".secret", 0700)
+			if err != nil {
+				fmt.Printf("❌ Ошибка создания .secret: %v\n", err)
+				os.Exit(1)
+			}
+			err = os.WriteFile(".secret/public.asc", pubData, 0600)
+			if err != nil {
+				fmt.Printf("❌ Ошибка сохранения публичного ключа: %v\n", err)
+				os.Exit(1)
+			}
+			err = os.WriteFile(".secret/private.asc", privData, 0600)
+			if err != nil {
+				fmt.Printf("❌ Ошибка сохранения приватного ключа: %v\n", err)
+				os.Exit(1)
+			}
+
+			// Сохраняем keyID в конфиг
+			keyID := privEntity.PrimaryKey.KeyIdString()
 
 			cfg.GPGKey = keyID
 			if err := config.SaveConfig(cfg); err != nil {
@@ -150,52 +189,4 @@ func findKeyFiles(searchDir, prefix string) (string, string, error) {
 	}
 
 	return pubKeyPath, privKeyPath, nil
-}
-
-// importKey импортирует ключ с помощью GPG
-func importKey(keyPath string) error {
-	cmd := exec.Command("gpg", "--import", keyPath)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ошибка выполнения gpg --import: %v", err)
-	}
-
-	return nil
-}
-
-// detectProjectKey определяет keyID по имени проекта
-func detectProjectKey(projectName string) (string, error) {
-	out, err := exec.Command("gpg", "--list-secret-keys", "--keyid-format=LONG").CombinedOutput()
-	if err != nil {
-		return "", err
-	}
-
-	lines := strings.Split(string(out), "\n")
-	for idx, line := range lines {
-		if strings.Contains(line, "uid") && strings.Contains(line, projectName) {
-			// Ищем "sec" в предыдущих строках (назад до 5 строк)
-			for j := 1; j <= 5; j++ {
-				if idx-j < 0 {
-					break
-				}
-				prevLine := lines[idx-j]
-				if strings.Contains(prevLine, "sec") {
-					parts := strings.Fields(prevLine)
-					if len(parts) >= 2 {
-						keyPart := parts[1]
-						if strings.Contains(keyPart, "/") {
-							keyParts := strings.Split(keyPart, "/")
-							if len(keyParts) == 2 {
-								return keyParts[1], nil
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return "", fmt.Errorf("не удалось найти ключ для проекта %s после импорта", projectName)
 }

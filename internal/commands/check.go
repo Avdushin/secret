@@ -4,11 +4,15 @@ package commands
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"bytes"
+
 	"github.com/Avdushin/secret/pkg/config"
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"github.com/spf13/cobra"
 )
 
@@ -40,12 +44,13 @@ func CheckCmd() *cobra.Command {
 // ? все доступные GPG ключи
 func checkAllKeys() {
 	fmt.Println("🔍 Проверяем все доступные GPG ключи...")
-	out, err := exec.Command("gpg", "--list-secret-keys", "--keyid-format=LONG").CombinedOutput()
+	// Since no system gpg, perhaps list from .secret
+	priv, err := os.ReadFile(".secret/private.asc")
 	if err != nil {
-		fmt.Printf("❌ Ошибка при получении списка ключей: %v\n", err)
+		fmt.Printf("❌ Нет ключей в .secret: %v\n", err)
 		return
 	}
-	fmt.Println(string(out))
+	fmt.Println(string(priv))
 }
 
 // ? Ключ текущего проекта
@@ -72,40 +77,65 @@ func checkProjectKey() {
 	}
 
 	// Проверяем существует ли ключ
-	checkCmd := exec.Command("gpg", "--list-keys", projectKey)
-	if output, err := checkCmd.CombinedOutput(); err != nil {
-		fmt.Printf("❌ Ключ проекта не найден в GPG: %s\n", projectKey)
-		fmt.Printf("Вывод: %s\n", string(output))
-		fmt.Printf("Возможно ключ был удален или не импортирован\n")
-		fmt.Println("Попробуйте импортировать ключ: secret import")
+	// Load private
+	privArm, err := os.ReadFile(".secret/private.asc")
+	if err != nil {
+		fmt.Printf("❌ Ключ проекта не найден: %v\n", err)
 		os.Exit(1)
-	} else {
-		// Показываем информацию о ключе проекта
-		fmt.Printf("✅ Ключ проекта найден:\n")
-		// Получаем детальную информацию о ключе
-		detailCmd := exec.Command("gpg", "--list-secret-keys", "--keyid-format=LONG", projectKey)
-		if detailOutput, err := detailCmd.CombinedOutput(); err == nil {
-			lines := strings.Split(string(detailOutput), "\n")
-			for _, line := range lines {
-				if strings.Contains(line, projectKey) || strings.Contains(line, "sec") || strings.Contains(line, "uid") {
-					fmt.Println(line)
-				}
-			}
-		}
-
-		// Проверяем возможность шифрования/расшифровки
-		fmt.Printf("\n🔐 Проверяем возможность шифрования... ")
-		testEncryptCmd := exec.Command("gpg", "--encrypt", "--recipient", projectKey, "--armor", "--output", "/dev/null", "/dev/null")
-		if err := testEncryptCmd.Run(); err != nil {
-			fmt.Println("❌ Ошибка шифрования")
-			fmt.Printf("Возможно ключ поврежден или не имеет необходимых прав\n")
-		} else {
-			fmt.Println("✅ OK")
-		}
 	}
+
+	block, err := armor.Decode(bytes.NewReader(privArm))
+	if err != nil {
+		fmt.Printf("❌ Ошибка декодирования: %v\n", err)
+		os.Exit(1)
+	}
+
+	entity, err := openpgp.ReadEntity(packet.NewReader(block.Body))
+	if err != nil {
+		fmt.Printf("❌ Ошибка чтения ключа: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✅ Ключ проекта найден:\n")
+	fmt.Printf("KeyID: %s\n", entity.PrimaryKey.KeyIdString())
+	fmt.Printf("Fingerprint: %s\n", entity.PrimaryKey.Fingerprint)
+	for id, identity := range entity.Identities {
+		fmt.Printf("Identity: %s\n", id, identity.Name)
+	}
+	fmt.Printf("Creation: %v\n", entity.PrimaryKey.CreationTime)
+
+	// Проверяем возможность шифрования
+	fmt.Printf("\n🔐 Проверяем возможность шифрования... ")
+
+	// Test encrypt small data
+	pubArm, err := os.ReadFile(".secret/public.asc")
+	if err != nil {
+		fmt.Println("❌ Ошибка")
+		return
+	}
+	pubBlock, err := armor.Decode(bytes.NewReader(pubArm))
+	if err != nil {
+		fmt.Println("❌ Ошибка")
+		return
+	}
+	pubEntity, err := openpgp.ReadEntity(packet.NewReader(pubBlock.Body))
+	if err != nil {
+		fmt.Println("❌ Ошибка")
+		return
+	}
+
+	buf := bytes.NewBuffer(nil)
+	w, err := openpgp.Encrypt(buf, []*openpgp.Entity{pubEntity}, nil, nil, nil)
+	if err != nil {
+		fmt.Println("❌ Ошибка шифрования")
+		return
+	}
+	w.Write([]byte("test"))
+	w.Close()
+
+	fmt.Println("✅ OK")
 }
 
-// ? Пытаетмся определить ключ проекта по имени текущей директории
 func detectProjectKeyFromDir() (string, error) {
 	// Получаем имя текущей директории
 	currentDir, err := os.Getwd()
@@ -114,34 +144,25 @@ func detectProjectKeyFromDir() (string, error) {
 	}
 	dirName := filepath.Base(currentDir)
 
-	// Получаем список всех ключей
-	out, err := exec.Command("gpg", "--list-secret-keys", "--keyid-format=LONG").CombinedOutput()
+	// Load private
+	privArm, err := os.ReadFile(".secret/private.asc")
 	if err != nil {
 		return "", err
 	}
 
-	lines := strings.Split(string(out), "\n")
-	for idx, line := range lines {
-		if strings.Contains(line, "uid") && strings.Contains(line, dirName) {
-			// Ищем "sec" в предыдущих строках (назад до 5 строк)
-			for j := 1; j <= 5; j++ {
-				if idx-j < 0 {
-					break
-				}
-				prevLine := lines[idx-j]
-				if strings.Contains(prevLine, "sec") {
-					parts := strings.Fields(prevLine)
-					if len(parts) >= 2 {
-						keyPart := parts[1]
-						if strings.Contains(keyPart, "/") {
-							keyParts := strings.Split(keyPart, "/")
-							if len(keyParts) == 2 {
-								return keyParts[1], nil
-							}
-						}
-					}
-				}
-			}
+	block, err := armor.Decode(bytes.NewReader(privArm))
+	if err != nil {
+		return "", err
+	}
+
+	entity, err := openpgp.ReadEntity(packet.NewReader(block.Body))
+	if err != nil {
+		return "", err
+	}
+
+	for _, identity := range entity.Identities {
+		if strings.Contains(identity.Name, dirName) {
+			return entity.PrimaryKey.KeyIdString(), nil
 		}
 	}
 	return "", fmt.Errorf("не удалось найти ключ для проекта %s", dirName)

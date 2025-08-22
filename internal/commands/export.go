@@ -1,9 +1,9 @@
+// internal/commands/export.go
 package commands
 
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -25,51 +25,55 @@ func ExportKeyCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			if cfg.GPGKey == "" {
-				fmt.Println("❌ В проекте не настроен GPG-ключ")
-				fmt.Println("Сначала выполните: secret init")
+			if err := exportKeys(cfg, outputDir); err != nil {
+				fmt.Printf("Ошибка экспорта ключей: %v\n", err)
 				os.Exit(1)
 			}
-
-			// Создаем директорию для экспорта
-			if outputDir == "" {
-				outputDir = filepath.Join(".secrets", "backup")
-			}
-			if err := os.MkdirAll(outputDir, 0700); err != nil {
-				fmt.Printf("Ошибка создания директории: %v\n", err)
-				os.Exit(1)
-			}
-
-			// Формируем имя файла с именем проекта
-			filenamePrefix := "key"
-			if cfg.ProjectName != "" {
-				filenamePrefix = strings.ToLower(strings.ReplaceAll(cfg.ProjectName, " ", "_"))
-			}
-
-			// Экспортируем публичный ключ
-			pubKeyPath := filepath.Join(outputDir, fmt.Sprintf("%s.pub.asc", filenamePrefix))
-			cmdPub := exec.Command("gpg", "--output", pubKeyPath, "--armor", "--export", cfg.GPGKey)
-			if output, err := cmdPub.CombinedOutput(); err != nil {
-				fmt.Printf("Ошибка экспорта публичного ключа: %s\n", output)
-				os.Exit(1)
-			}
-
-			// Экспортируем приватный ключ
-			privKeyPath := filepath.Join(outputDir, fmt.Sprintf("%s.priv.asc", filenamePrefix))
-			cmdPriv := exec.Command("gpg", "--output", privKeyPath, "--armor", "--export-secret-keys", cfg.GPGKey)
-			cmdPriv.Stdin = os.Stdin // Для ввода пароля если нужно
-			if output, err := cmdPriv.CombinedOutput(); err != nil {
-				fmt.Printf("Ошибка экспорта приватного ключа: %s\n", output)
-				os.Exit(1)
-			}
-
-			fmt.Printf("\n✅ Ключи экспортированы в %s:\n", outputDir)
-			fmt.Printf(" - Публичный ключ: %s\n", pubKeyPath)
-			fmt.Printf(" - Приватный ключ: %s\n", privKeyPath)
-			fmt.Println("\n⚠️ Безопасно передайте приватный ключ другим участникам проекта!")
 		},
 	}
 
 	cmd.Flags().StringVarP(&outputDir, "output", "o", "", "Директория для экспорта (по умолчанию .secrets/backup)")
 	return cmd
+}
+
+func exportKeys(cfg *config.Config, outputDir string) error {
+	if outputDir == "" {
+		outputDir = filepath.Join(".secrets", "backup")
+	}
+	if err := os.MkdirAll(outputDir, 0700); err != nil {
+		return fmt.Errorf("ошибка создания директории: %v", err)
+	}
+
+	// Формируем имя файла с именем проекта
+	filenamePrefix := "key"
+	if cfg.ProjectName != "" {
+		filenamePrefix = strings.ToLower(strings.ReplaceAll(cfg.ProjectName, " ", "_"))
+	}
+
+	// Копируем публичный ключ
+	pubKeyPath := filepath.Join(outputDir, fmt.Sprintf("%s.pub.asc", filenamePrefix))
+	pubData, err := os.ReadFile(".secret/public.asc")
+	if err != nil {
+		return fmt.Errorf("не удалось прочитать публичный ключ: %v", err)
+	}
+	if err := os.WriteFile(pubKeyPath, pubData, 0600); err != nil {
+		return fmt.Errorf("не удалось сохранить публичный ключ: %v", err)
+	}
+
+	// Копируем приватный ключ
+	privKeyPath := filepath.Join(outputDir, fmt.Sprintf("%s.priv.asc", filenamePrefix))
+	privData, err := os.ReadFile(".secret/private.asc")
+	if err != nil {
+		return fmt.Errorf("не удалось прочитать приватный ключ: %v", err)
+	}
+	if err := os.WriteFile(privKeyPath, privData, 0600); err != nil {
+		return fmt.Errorf("не удалось сохранить приватный ключ: %v", err)
+	}
+
+	fmt.Printf("\n✅ Ключи экспортированы в %s:\n", outputDir)
+	fmt.Printf(" - Публичный ключ: %s\n", pubKeyPath)
+	fmt.Printf(" - Приватный ключ: %s\n", privKeyPath)
+	fmt.Println("\n⚠️ Безопасно передайте приватный ключ другим участникам проекта!")
+
+	return nil
 }

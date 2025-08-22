@@ -1,3 +1,4 @@
+// cmd/secret/main.go
 package main
 
 import (
@@ -12,7 +13,7 @@ func main() {
 	var rootCmd = &cobra.Command{
 		Use:     "secret",
 		Short:   "Утилита для управления секретами в проектах",
-		Version: "0.1.3",
+		Version: "0.1.4",
 	}
 
 	rootCmd.AddCommand(commands.InitCmd())

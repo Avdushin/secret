@@ -1,3 +1,4 @@
+// internal/commands/encrypt.go
 package commands
 
 import (

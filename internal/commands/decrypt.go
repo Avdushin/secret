@@ -1,3 +1,4 @@
+// internal/commands/decrypt.go
 package commands
 
 import (

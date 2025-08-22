@@ -1,7 +1,7 @@
 # Project settings
 NAME = secret
 # VERSION = $(shell git describe --tags --always --dirty)
-VERSION = 0.1.0
+# VERSION = 0.1.0
 BUILD_DIR = bin
 GO_PACKAGE = ./cmd/$(NAME)
 

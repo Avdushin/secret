@@ -1,14 +1,22 @@
+// internal/backends/gpg.go
 package backends
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Avdushin/secret/pkg/config"
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
+	"golang.org/x/term"
 )
 
 type GPGBackend struct {
@@ -20,26 +28,50 @@ func NewGPGBackend(cfg *config.Config) *GPGBackend {
 }
 
 func (g *GPGBackend) Encrypt(file string) error {
-	if g.cfg.GPGKey == "" {
-		return fmt.Errorf("не настроен GPG-ключ проекта. Сначала выполните: secret init")
-	}
 	if _, err := os.Stat(file); os.IsNotExist(err) {
 		return fmt.Errorf("файл %s не существует", file)
 	}
 	outFile := file + ".gpg"
-	cmd := exec.Command(
-		"gpg",
-		"--encrypt",
-		"--recipient", g.cfg.GPGKey,
-		"--trust-model", "always",
-		"--output", outFile,
-		file,
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+
+	// Load public key
+	pubArm, err := os.ReadFile(".secret/public.asc")
+	if err != nil {
+		return fmt.Errorf("не удалось прочитать публичный ключ: %v", err)
+	}
+	pubBlock, err := armor.Decode(bytes.NewReader(pubArm))
+	if err != nil {
+		return fmt.Errorf("ошибка декодирования публичного ключа: %v", err)
+	}
+	pubEntity, err := openpgp.ReadEntity(packet.NewReader(pubBlock.Body))
+	if err != nil {
+		return fmt.Errorf("ошибка чтения публичного ключа: %v", err)
+	}
+
+	f, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	out, err := os.Create(outFile)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	hints := &openpgp.FileHints{IsBinary: true, FileName: filepath.Base(file), ModTime: time.Now()}
+
+	w, err := openpgp.Encrypt(out, []*openpgp.Entity{pubEntity}, nil, hints, nil)
+	if err != nil {
 		return fmt.Errorf("ошибка шифрования: %v", err)
 	}
+
+	_, err = io.Copy(w, f)
+	if err != nil {
+		return err
+	}
+	w.Close()
+
 	// Создаем .example файл
 	if err := createExampleFile(file); err != nil {
 		return fmt.Errorf("не удалось создать .example файл: %v", err)
@@ -49,26 +81,77 @@ func (g *GPGBackend) Encrypt(file string) error {
 }
 
 func (g *GPGBackend) Decrypt(file string) error {
-	if g.cfg.GPGKey == "" {
-		return fmt.Errorf("не настроен GPG-ключ проекта")
-	}
 	if _, err := os.Stat(file); os.IsNotExist(err) {
 		return fmt.Errorf("файл %s не существует", file)
 	}
 	outFile := strings.TrimSuffix(file, filepath.Ext(file))
-	cmd := exec.Command(
-		"gpg",
-		"--decrypt",
-		"--output", outFile,
-		file,
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+
+	// Load private key
+	privArm, err := os.ReadFile(".secret/private.asc")
+	if err != nil {
+		return fmt.Errorf("не удалось прочитать приватный ключ: %v", err)
+	}
+	privBlock, err := armor.Decode(bytes.NewReader(privArm))
+	if err != nil {
+		return fmt.Errorf("ошибка декодирования приватного ключа: %v", err)
+	}
+	privEntity, err := openpgp.ReadEntity(packet.NewReader(privBlock.Body))
+	if err != nil {
+		return fmt.Errorf("ошибка чтения приватного ключа: %v", err)
+	}
+
+	f, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	out, err := os.Create(outFile)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	prompt := func(keys []openpgp.Key, symmetric bool) ([]byte, error) {
+		if symmetric {
+			return nil, fmt.Errorf("симметричное шифрование не поддерживается")
+		}
+		// Предполагаем первый ключ
+		pass := promptPassword("Введите парольную фразу для приватного ключа: ")
+		err = keys[0].PrivateKey.Decrypt([]byte(pass))
+		if err != nil {
+			return nil, err
+		}
+		return nil, nil // nil passphrase, since asymmetric
+	}
+
+	md, err := openpgp.ReadMessage(f, openpgp.EntityList{privEntity}, prompt, nil)
+	if err != nil {
 		return fmt.Errorf("ошибка дешифровки: %v", err)
 	}
+
+	_, err = io.Copy(out, md.UnverifiedBody)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("✅ Файл %s расшифрован в %s\n", file, outFile)
 	return nil
+}
+
+func promptPassword(prompt string) string {
+	fmt.Print(prompt)
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+		if err == nil {
+			fmt.Println()
+			return string(bytePassword)
+		}
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	return strings.TrimSpace(input)
 }
 
 // !TODO: вынести работу с .examples в отдельный модуль
