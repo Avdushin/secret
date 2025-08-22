@@ -55,6 +55,7 @@ func EncryptCmd() *cobra.Command {
 					fmt.Printf("⚠️ Ошибка при шифровании %s: %v\n", file, err)
 				}
 			}
+
 			fmt.Println("✅ Все файлы обработаны")
 		},
 	}
