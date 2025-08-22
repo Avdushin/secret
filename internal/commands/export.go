@@ -16,7 +16,7 @@ func ExportKeyCmd() *cobra.Command {
 	var outputDir string
 
 	cmd := &cobra.Command{
-		Use:   "export-key",
+		Use:   "export",
 		Short: "Экспортирует GPG-ключ проекта",
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg, err := config.LoadConfig()

@@ -42,16 +42,39 @@ cd ~/projects/my-awesome-app
 ## 4. Управление ключами
 ```bash
 # Экспорт ключей проекта (в .secrets/backup/)
-./secret export-key
+./secret export
 
 # Экспорт в конкретную директорию
-./secret export-key -o ~/backups/myapp-keys
+./secret export -o ~/backups/myapp-keys
+
+# Импорт ключей проекта (автопоиск в текущей директории)
+./secret import
+
+# Импорт из конкретной директории
+./secret import .secrets/backup/
+./secret import --dir ~/backups/myapp-keys
 
 # Удаление ключа проекта (с подтверждением и бэкапом)
 ./secret delete-key
 
 # Принудительное удаление без подтверждения
 ./secret delete-key --force
+```
+
+
+## 4.1 Импорт ключей
+
+Чтобы импортировать GPG-ключи в свою систему:
+
+```bash
+# Автоматический поиск ключей в текущей директории
+secret import
+
+# Указать конкретную директорию для поиска
+secret import --dir path/to/keys
+
+# Принудительный импорт (если ключи уже существуют)
+secret import --force
 ```
 
 ## 5. Работа с разными форматами
