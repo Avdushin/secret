@@ -144,7 +144,7 @@ func InitCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			fmt.Printf("\n✅ Успешно! Ключ создан (ID: %s)\n", keyID)
+			fmt.Printf("\n✅ Успешно! Ключ создан (ID: %X)\n", keyID)
 			fmt.Printf("🔑 Для экспорта ключа выполните: secret export\n")
 			fmt.Printf("🔒 Для шифрования файлов выполните: secret encrypt\n")
 		},
