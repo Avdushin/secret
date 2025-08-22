@@ -3,6 +3,7 @@
 [![Go](https://img.shields.io/badge/Go-1.20%2B-blue?logo=go)](https://golang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/Version-0.0.1-green)](https://github.com/Avdushin/secret/releases)
+[![Requires: GPG](https://img.shields.io/badge/Requires-GPG-critical?logo=gnu-privacy-guard&logoColor=white)](https://gnupg.org)
 
 Командная утилита для управления секретами в проектах. Шифрует конфиденциальные файлы (`.env`, JSON, YAML и др.) с помощью GPG (планируется Vault/Bitwarden). Создаёт шаблоны `.example` с плейсхолдерами для безопасной совместной работы.
 
